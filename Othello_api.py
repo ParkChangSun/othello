@@ -172,7 +172,7 @@ class Othello_api:
         # code here!!!!!
         # 방장이 선플레이어
         # 내턴이 안오면 아예 작동을 안하는 듯
-        print(self.game_info)
+        # print(self.game_info)
         # gameinfo
         # if [turn] == socketid 이면 플레이
         # [board] -1 empty 0흑 1백
@@ -184,7 +184,7 @@ class Othello_api:
         # [1] = stone count
         # [2] = board data that played that placeable spot
         # [3] = current turn player index (board stone number)
-        print(self.socket_id)
+        # print(self.socket_id)
 
         # player에서 앞에 있는 애가 선플레이어(검은색, 내 보드에서는 1)
         # 내보드에서 1흑 2백
@@ -194,17 +194,21 @@ class Othello_api:
         for i in range(8):
             for j in range(8):
                 boardPlus1[i][j] += 1
-        othello = OthelloNode(boardPlus1, 1, 1)
+        othello = OthelloNode(boardPlus1, 4, 1)
         # othello.printBoard()
         # print(terToBoard(int(self.game_info['placeable'][2][0])))
-        bestMove = mmOthello(othello, othello.depth, 1)
 
-        # find&check best move
-        # currentPlayable = legalPlaySpots(othello,1)[bestMove]
-        # for moves in self.game_info['placeable'][0]:
-        #     if currentPlayable[0] == moves[0] and bestMove[1] == moves[1]:
-        #         self.put_stone()
-        if legalPlaySpots(othello, 1)[bestMove] in self.game_info['placeable'][0]:
+        # if playerNum == 1:
+        #     playerNum = 2
+        # elif playerNum == 2:
+        #     playerNum = 1
+        # bestMove = mmOthello(othello, othello.depth, 2)
+        bestMove = othello.bestMove()
+
+        print(self.game_info['placeable'][0])
+        print(legalPlaySpots(othello.board, 1))
+        print(bestMove)
+        if legalPlaySpots(othello.board, 1)[bestMove] in self.game_info['placeable'][0]:
             self.put_stone(bestMove)
 
         self.put_stone(0)
@@ -220,15 +224,6 @@ directions = [[1, 0], [1, 1], [0, 1], [-1, 1],
 def printBoard(b):
     for i in range(8):
         print(b[i])
-
-
-# def countBoard(player):
-#     count = 0
-#     for i in range(8):
-#         for j in range(8):
-#             if board[i][j] == player:
-#                 count += 1
-#     return count
 
 
 def terToBoard(num):
@@ -320,7 +315,7 @@ class FlipCellHandler:
         self.myIcon = myIcon
         self.currentFlipList = []
 
-    # row col은 시작점 아니고 iterate되는 점들
+    # row col은 시작점 아니고 iterate되는 점들(+한칸씩)
     def handleCell(self, board, row, col, icon):
         # 적돌은 리스트에 추가하다가
         if (icon != self.myIcon):
@@ -344,7 +339,7 @@ def iterateCellsFlip(board, row, col, drow, dcol, handler):
         if (icon == 0):
             break
         # handler can stop iteration
-        if not handler.handleCell(row, col, icon):
+        if not handler.handleCell(board, row, col, icon):
             return len(handler.currentFlipList)
             break
         row += drow
@@ -372,9 +367,6 @@ class OthelloNode:
         self.playerNum = playerNum
         self.value = self.countStones(playerNum)
         self.createChildren(playerNum)
-
-    # def boardSet(self, board):
-    #     self.board = board
 
     def printBoard(self):
         for i in range(8):
@@ -417,37 +409,35 @@ class OthelloNode:
             self.board[row][col] = player
         return count
 
-    # max flip values
     def createChildren(self, player):
-        maxval = 0
+        if self.depth < 0:
+            return
+        nextNum = 0
         newBoard = copyBoard(self.board)
-        # print(newBoard)
         for legal in legalPlaySpots(newBoard, player):
             newBoard = copyBoard(self.board)
-            node = OthelloNode(newBoard)
-            node.flip(legal[0], legal[1], player)
 
-            # 최대로 뒤집는 수 알고리즘
-            if node.countStones(player) > maxval:
-                self.children = [node]
-                maxval = node.countStones(player)
-            elif node.countStones(player) == maxval:
-                self.children.append(node)
-            else:
-                pass
-            # print(maxval)
-        for n in self.children:
-            n.printBoard()
+            flip(newBoard, legal[0], legal[1], self.playerNum)
+
+            if self.playerNum == 1:
+                nextNum = 2
+            elif self.playerNum == 2:
+                nextNum = 1
+
+            node = OthelloNode(newBoard, self.depth-1, nextNum)
+            self.children.append(node)
 
     def bestMove(self):
         bestChoice = 0
         bestValue = 0
+        playerNum = 0
+        # print("children", len(self.children))
         for i in range(len(self.children)):
             child = self.children[i]
 
-            if playerNum == 1:
+            if self.playerNum == 1:
                 playerNum = 2
-            elif playerNum == 2:
+            elif self.playerNum == 2:
                 playerNum = 1
             val = mmOthello(child, child.depth, playerNum)
             if (val > bestValue):
@@ -481,30 +471,14 @@ def mmOthello(node, depth, playerNum):
         elif playerNum == 2:
             playerNum = 1
 
-        val = MinMax(child, depth-1, playerNum)
+        val = mmOthello(child, child.depth, playerNum)
         if (val > bestValue):
             bestValue = val
 
     return bestValue
 
 
-def MinMax(node, depth, playerNum):
-    # 마지막 차일드이거나 이길확률 크면 밸류 리턴
-    if (depth == 0) or (abs(node.value) == maxsize):
-        return node.value
-
-    # 일단 최소값으로 설정
-    bestValue = maxsize * -playerNum
-    for i in range(len(node.children)):
-        child = node.children[i]
-        # 바닥까지
-        val = MinMax(child, depth-1, -playerNum)
-        if (abs(maxsize*playerNum-val) < abs(maxsize*playerNum-bestValue)):
-            bestValue = val
-    return bestValue
-
-
-# 둘 곳이 없는 경우도 체크
+# 둘 곳이 없는 경우도 체크?
 api = Othello_api()
 # board = terToBoard(984971066491994656644)
 # print(board)
@@ -521,44 +495,3 @@ api = Othello_api()
 # othello.children[0].createChildren(1)
 
 api.run()
-
-
-class Node:
-    def __init__(self, depth, playerNum, stickRemaining, value):
-        # 깊이는 루트가 뭐 대충 10이상이고 끝 차일드가 0
-        self.depth = depth
-        self.playerNum = playerNum
-        self.stickRemaining = stickRemaining
-        self.value = value
-        self.children = []
-        self.CreateChildren()
-
-    def CreateChildren(self):
-        if self.depth >= 0:
-            for i in range(1, 3):
-                v = self.stickRemaining-i
-                self.children.append(
-                    Node(self.depth-1, -self.playerNum, v, self.RealVal(v)))
-
-    def RealVal(self, value):
-        if value == 0:
-            return maxsize*self.playerNum
-        elif value < 0:
-            return maxsize * -self.playerNum
-        return 0
-
-
-def MinMax(node, depth, playerNum):
-    # 마지막 차일드이거나 이길확률 크면 밸류 리턴
-    if (depth == 0) or (abs(node.value) == maxsize):
-        return node.value
-
-    # 일단 최소값으로 설정
-    bestValue = maxsize * -playerNum
-    for i in range(len(node.children)):
-        child = node.children[i]
-        # 바닥까지
-        val = MinMax(child, depth-1, -playerNum)
-        if (abs(maxsize*playerNum-val) < abs(maxsize*playerNum-bestValue)):
-            bestValue = val
-    return bestValue
